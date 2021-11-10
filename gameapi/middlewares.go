@@ -21,11 +21,12 @@ func playerIdCookieMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			expires := time.Now().Add(time.Hour * 24 * 30)
 			cookie := http.Cookie{
-				Name:    playerIdCookieName,
-				Value:   uuid.New().String(),
-				Expires: expires,
-				MaxAge:  0,
-				Path:    "/",
+				Name:     playerIdCookieName,
+				Value:    uuid.New().String(),
+				Expires:  expires,
+				MaxAge:   0,
+				Path:     "/",
+				HttpOnly: true,
 			}
 			http.SetCookie(response, &cookie)
 		}
