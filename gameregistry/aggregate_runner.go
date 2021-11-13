@@ -7,8 +7,8 @@ import (
 	"github.com/mheck136/planning-poker/gameevents"
 )
 
-func NewGameAggregateProxy(id uuid.UUID) GameAggregateProxy {
-	w := &GameAggregateWrapper{
+func NewAggregateRunner(id uuid.UUID) GameAggregateProxy {
+	w := &AggregateRunner{
 		in:        make(chan interface{}),
 		aggregate: gamedomain.NewGameAggregate(id),
 	}
@@ -16,29 +16,29 @@ func NewGameAggregateProxy(id uuid.UUID) GameAggregateProxy {
 	return w
 }
 
-type GameAggregateWrapper struct {
+type AggregateRunner struct {
 	in        chan interface{}
 	aggregate *gamedomain.GameAggregate
 }
 
-func (w *GameAggregateWrapper) run() {
-	for c := range w.in {
+func (r *AggregateRunner) run() {
+	for c := range r.in {
 		switch command := c.(type) {
 		case joinCommandWrapper:
-			events := w.aggregate.HandleJoinCommand(command.joinCommand)
-			// TODO: persist events
-			err := w.handleEvents(events)
+			events := r.aggregate.HandleJoinCommand(command.joinCommand)
+			err := r.handleEvents(events)
 			command.reply <- err
 			close(command.reply)
 		}
 	}
 }
 
-func (w *GameAggregateWrapper) handleEvents(events []gameevents.GameEvent) error {
+func (r *AggregateRunner) handleEvents(events []gameevents.GameEvent) error {
+	// TODO: persist events
 	for _, e := range events {
 		switch event := e.(type) {
 		case gameevents.JoinedEvent:
-			w.aggregate.HandleJoinedEvent(event)
+			r.aggregate.HandleJoinedEvent(event)
 		}
 	}
 	return nil
@@ -49,9 +49,9 @@ type joinCommandWrapper struct {
 	reply       chan error
 }
 
-func (w *GameAggregateWrapper) SendJoinCommand(c gamecommands.JoinCommand) error {
+func (r *AggregateRunner) SendJoinCommand(c gamecommands.JoinCommand) error {
 	reply := make(chan error, 1)
-	w.in <- joinCommandWrapper{
+	r.in <- joinCommandWrapper{
 		joinCommand: c,
 		reply:       reply,
 	}
