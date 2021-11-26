@@ -31,3 +31,7 @@ func (a *GameAggregate) HandleJoinCommand(c gamecommands.JoinCommand) []gameeven
 func (a *GameAggregate) HandleJoinedEvent(e gameevents.JoinedEvent) {
 	a.table.Join(e.PlayerId, e.Name)
 }
+
+func (a *GameAggregate) GetTableSnapshot() Table {
+	return Table{} // TODO
+}

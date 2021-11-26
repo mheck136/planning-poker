@@ -15,7 +15,7 @@ func NewGameRegistry(proxyFactory ProxyFactory) *GameRegistry {
 }
 
 type GameAggregateProxy interface {
-	SendJoinCommand(c gamecommands.JoinCommand) error
+	SendJoinCommand(c gamecommands.JoinCommand)
 }
 
 type ProxyFactory func(id uuid.UUID) GameAggregateProxy

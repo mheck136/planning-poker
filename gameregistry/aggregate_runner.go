@@ -7,28 +7,54 @@ import (
 	"github.com/mheck136/planning-poker/gameevents"
 )
 
-func NewAggregateRunner(id uuid.UUID) GameAggregateProxy {
-	w := &AggregateRunner{
-		in:        make(chan interface{}),
-		aggregate: gamedomain.NewGameAggregate(id),
+type Aggregate interface {
+	HandleJoinCommand(command gamecommands.JoinCommand) []gameevents.GameEvent
+	HandleJoinedEvent(event gameevents.JoinedEvent)
+	GetTableSnapshot() gamedomain.Table
+}
+
+type StatePublisher interface {
+	PublishState(table gamedomain.Table)
+}
+
+type AggregateRunnerCfg struct {
+	AggregateFactory func(uuid.UUID) Aggregate
+	Publisher        StatePublisher
+}
+
+func NewAggregateRunnerFactory(cfg AggregateRunnerCfg) func(uuid.UUID) GameAggregateProxy {
+	config := cfg
+	return func(id uuid.UUID) GameAggregateProxy {
+		w := &AggregateRunner{
+			in:        make(chan gamecommands.GameCommand),
+			aggregate: config.AggregateFactory(id),
+			publisher: config.Publisher,
+		}
+		go w.run()
+		return w
 	}
-	go w.run()
-	return w
+
 }
 
 type AggregateRunner struct {
-	in        chan interface{}
-	aggregate *gamedomain.GameAggregate
+	in        chan gamecommands.GameCommand
+	aggregate Aggregate
+	publisher StatePublisher
 }
 
 func (r *AggregateRunner) run() {
 	for c := range r.in {
+		var err error
 		switch command := c.(type) {
-		case joinCommandWrapper:
-			events := r.aggregate.HandleJoinCommand(command.joinCommand)
-			err := r.handleEvents(events)
-			command.reply <- err
-			close(command.reply)
+		case gamecommands.JoinCommand:
+			events := r.aggregate.HandleJoinCommand(command)
+			err = r.handleEvents(events)
+		}
+		if err != nil {
+			// TODO handle error
+		} else {
+			snapshot := r.aggregate.GetTableSnapshot()
+			r.publisher.PublishState(snapshot)
 		}
 	}
 }
@@ -44,16 +70,6 @@ func (r *AggregateRunner) handleEvents(events []gameevents.GameEvent) error {
 	return nil
 }
 
-type joinCommandWrapper struct {
-	joinCommand gamecommands.JoinCommand
-	reply       chan error
-}
-
-func (r *AggregateRunner) SendJoinCommand(c gamecommands.JoinCommand) error {
-	reply := make(chan error, 1)
-	r.in <- joinCommandWrapper{
-		joinCommand: c,
-		reply:       reply,
-	}
-	return <-reply
+func (r *AggregateRunner) SendJoinCommand(c gamecommands.JoinCommand) {
+	r.in <- c
 }

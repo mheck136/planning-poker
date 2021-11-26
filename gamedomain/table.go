@@ -43,8 +43,10 @@ type Table struct {
 }
 
 func (t *Table) Join(playerId uuid.UUID, name string) {
-	t.players[playerId] = name
-	log.Info().Str("playerId", playerId.String()).Str("playerName", name).Msg("player joined")
+	if currentName, ok := t.players[playerId]; !ok || currentName != name {
+		t.players[playerId] = name
+		log.Info().Str("playerId", playerId.String()).Str("playerName", name).Msg("player joined")
+	}
 }
 
 func (t *Table) Leave(playerId uuid.UUID) bool {
@@ -107,4 +109,22 @@ func (t *Table) HasPlayerJoined(playerId uuid.UUID) bool {
 		}
 	}
 	return false
+}
+
+func (t *Table) Copy() Table {
+	players := map[uuid.UUID]string{}
+	for playerId, playerName := range t.players {
+		players[playerId] = playerName
+	}
+	votes := map[uuid.UUID]string{}
+	for playerId, vote := range t.votes {
+		votes[playerId] = vote
+	}
+	return Table{
+		id:        t.id,
+		players:   players,
+		state:     t.state,
+		roundName: t.roundName,
+		votes:     votes,
+	}
 }
