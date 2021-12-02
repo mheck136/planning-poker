@@ -2,6 +2,7 @@ package gameapi
 
 import (
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
 )
@@ -30,6 +31,13 @@ func playerIdCookieMiddleware(next http.Handler) http.Handler {
 			}
 			http.SetCookie(response, &cookie)
 		}
+		next.ServeHTTP(response, request)
+	})
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		log.Info().Str("component", "mux").Str("path", request.URL.Path).Str("method", request.Method).Msg("HTTP request received")
 		next.ServeHTTP(response, request)
 	})
 }

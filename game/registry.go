@@ -5,10 +5,11 @@ import (
 	"sync"
 )
 
-func NewRegistry(store EventStore) *Registry {
+func NewRegistry(store EventStore, notifier Notifier) *Registry {
 	return &Registry{
 		lock:           &sync.RWMutex{},
 		eventStore:     store,
+		notifier:       notifier,
 		aggregateRoots: make(map[uuid.UUID]*AggregateRoot),
 	}
 }
@@ -16,6 +17,7 @@ func NewRegistry(store EventStore) *Registry {
 type Registry struct {
 	lock           *sync.RWMutex
 	eventStore     EventStore
+	notifier       Notifier
 	aggregateRoots map[uuid.UUID]*AggregateRoot
 }
 
@@ -38,5 +40,5 @@ func (r *Registry) GetAggregateRoot(id uuid.UUID) *AggregateRoot {
 }
 
 func (r *Registry) createAggregateRoot(id uuid.UUID) *AggregateRoot {
-	return newAggregateRoot(id, r.eventStore)
+	return newAggregateRoot(id, r.eventStore, r.notifier)
 }

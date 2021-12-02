@@ -5,24 +5,26 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/mheck136/planning-poker/gamecommands"
-	"github.com/mheck136/planning-poker/gameregistry"
+	"github.com/mheck136/planning-poker/game"
+	"github.com/mheck136/planning-poker/notifier"
 	"github.com/rs/zerolog/log"
 	"net/http"
 )
 
-func New(registry *gameregistry.GameRegistry, notificationService NotificationService) *GameApi {
+func New(registry *game.Registry, notifier *notifier.Notifier) *GameApi {
 	r := mux.NewRouter()
 	gameApi := &GameApi{
 		mux:          r,
 		gameRegistry: registry,
+		notifier:     notifier,
 	}
 
+	r.Use(loggingMiddleware)
 	r.Use(playerIdCookieMiddleware)
 	r.Use(jsonContentTypeMiddleware)
-	gameRouter := r.PathPrefix("/game/{gameId}").Subrouter()
 
-	gameRouter.HandleFunc("/join", gameApi.gameHandler(gameApi.joinHandler)).Methods("POST")
+	r.HandleFunc("/games/{gameId}/{action}", gameApi.commandHandler).Methods("POST")
+	r.HandleFunc("/game-updates/{gameId}", gameApi.websocketHandler).Methods("GET")
 
 	return gameApi
 }
@@ -33,39 +35,75 @@ type NotificationService interface {
 }
 
 type GameApi struct {
-	mux                 *mux.Router
-	gameRegistry        *gameregistry.GameRegistry
-	notificationService NotificationService
+	mux          *mux.Router
+	gameRegistry *game.Registry
+	notifier     *notifier.Notifier
 }
 
-func (g *GameApi) joinHandler(response http.ResponseWriter, request *http.Request, ctx gameContext) {
-	type joinRequest struct {
-		Name string `json:"name"`
-	}
-	var req joinRequest
-	err := json.NewDecoder(request.Body).Decode(&req)
+func (a *GameApi) commandHandler(response http.ResponseWriter, request *http.Request) {
+	gameId, err := extractGameId(request)
 	if err != nil {
 		response.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(response).Encode(map[string]string{"error": err.Error()})
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "missing or invalid game id"})
 		return
 	}
-	aggregate := g.gameRegistry.GetGameAggregateProxy(ctx.gameId)
-	aggregate.SendJoinCommand(gamecommands.JoinCommand{
-		PlayerId: ctx.playerId,
-		Name:     req.Name,
-	})
-	log.Info().Str("playerId", ctx.playerId.String()).Str("playerId", ctx.playerId.String()).Msg("player joined game")
-	g.notificationService.SendJsonNotification(ctx.gameId, map[string]string{"event": "PLAYER_JOINED", "playerId": ctx.playerId.String(), "name": req.Name})
-	_ = json.NewEncoder(response).Encode(map[string]string{"name": req.Name})
+	playerId, err := extractPlayerId(request)
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "missing or invalid player id"})
+		return
+	}
+	action, ok := mux.Vars(request)["action"]
+	if !ok {
+		response.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "missing or invalid action"})
+		return
+	}
+	var cr CommandRequest
+	switch action {
+	case "join":
+		cr = &JoinCommandRequest{}
+	case "start":
+		cr = &StartRoundCommandRequest{}
+	case "vote":
+		cr = &CastVoteCommandRequest{}
+	}
+	err = json.NewDecoder(request.Body).Decode(cr)
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "invalid body request", "message": err.Error()})
+		return
+	}
+	cmd := cr.toCommand(playerId)
+	gameAggregate := a.gameRegistry.GetAggregateRoot(gameId)
+	gameAggregate.HandleCommand(cmd)
+	response.WriteHeader(http.StatusAccepted)
 }
 
-func (a *GameApi) subscribeHandler(response http.ResponseWriter, request *http.Request, ctx gameContext) {
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+func (a *GameApi) websocketHandler(response http.ResponseWriter, request *http.Request) {
+	log.Info().Msg("websocket request")
+	gameId, err := extractGameId(request)
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "missing or invalid game id"})
+		return
+	}
+	playerId, err := extractPlayerId(request)
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "missing or invalid player id"})
+		return
+	}
+	log.Info().Msg("upgrading")
 	conn, err := upgrader.Upgrade(response, request, nil)
 	if err != nil {
-		response.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(response).Encode(map[string]string{"error": err.Error()})
+		log.Error().Err(err).Msg("error while upgrading to websocket connection")
 		return
 	}
-	a.notificationService.Register(ctx.gameId, ctx.playerId, conn)
-	log.Info().Str("playerId", ctx.playerId.String()).Str("playerId", ctx.playerId.String()).Msg("new subscription started")
+	a.notifier.HandleNewConnection(conn, playerId, gameId)
 }
