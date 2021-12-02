@@ -24,7 +24,7 @@ type StartRoundCommand struct {
 	RoundName string
 }
 
-func (c StartRoundCommand) CanExecute(r *AggregateRoot) bool {
+func (StartRoundCommand) CanExecute(r *AggregateRoot) bool {
 	return r.board.isIdle()
 }
 
@@ -39,7 +39,7 @@ type CastVoteCommand struct {
 	Vote     string
 }
 
-func (c CastVoteCommand) CanExecute(r *AggregateRoot) bool {
+func (CastVoteCommand) CanExecute(r *AggregateRoot) bool {
 	return r.board.isOpenForVotes()
 }
 
@@ -49,5 +49,32 @@ func (c CastVoteCommand) ExecuteCommand(*AggregateRoot) []Event {
 			PlayerId: c.PlayerId,
 			Vote:     c.Vote,
 		},
+	}
+}
+
+type FinishRoundCommand struct {
+	Result string
+}
+
+func (FinishRoundCommand) CanExecute(r *AggregateRoot) bool {
+	return r.board.isDeciding()
+}
+
+func (c FinishRoundCommand) ExecuteCommand(*AggregateRoot) []Event {
+	return []Event{
+		RoundFinishedEvent{Result: c.Result},
+	}
+}
+
+type RevealCardsCommand struct {
+}
+
+func (RevealCardsCommand) CanExecute(r *AggregateRoot) bool {
+	return r.board.isOpenForVotes()
+}
+
+func (c RevealCardsCommand) ExecuteCommand(*AggregateRoot) []Event {
+	return []Event{
+		CardsRevealedEvent{},
 	}
 }

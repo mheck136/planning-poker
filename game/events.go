@@ -5,10 +5,12 @@ import "github.com/google/uuid"
 type EventName string
 
 const (
-	undefinedEventName    EventName = ""
-	playerJoinedEventName EventName = "PLAYER_JOINED"
-	roundStartedEventName EventName = "ROUND_STARTED"
-	voteCastEventName     EventName = "VOTE_CAST"
+	_                      EventName = ""
+	playerJoinedEventName  EventName = "PLAYER_JOINED"
+	roundStartedEventName  EventName = "ROUND_STARTED"
+	voteCastEventName      EventName = "VOTE_CAST"
+	finishedRoundEventName EventName = "FINISHED_ROUND"
+	cardsRevealedEventName EventName = "CARDS_REVEALED"
 )
 
 type PlayerJoinedEvent struct {
@@ -50,4 +52,26 @@ func (e VoteCastEvent) ExecuteEvent(a *AggregateRoot) {
 
 func (e VoteCastEvent) EventName() EventName {
 	return voteCastEventName
+}
+
+type RoundFinishedEvent struct {
+	Result string
+}
+
+func (e RoundFinishedEvent) ExecuteEvent(a *AggregateRoot) {
+	a.board.finishRound()
+}
+
+func (e RoundFinishedEvent) EventName() EventName {
+	return finishedRoundEventName
+}
+
+type CardsRevealedEvent struct{}
+
+func (e CardsRevealedEvent) ExecuteEvent(a *AggregateRoot) {
+	a.board.revealCards()
+}
+
+func (e CardsRevealedEvent) EventName() EventName {
+	return cardsRevealedEventName
 }

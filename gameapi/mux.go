@@ -60,6 +60,7 @@ func (a *GameApi) commandHandler(response http.ResponseWriter, request *http.Req
 		return
 	}
 	var cr CommandRequest
+	var cmd game.Command
 	switch action {
 	case "join":
 		cr = &JoinCommandRequest{}
@@ -67,14 +68,20 @@ func (a *GameApi) commandHandler(response http.ResponseWriter, request *http.Req
 		cr = &StartRoundCommandRequest{}
 	case "vote":
 		cr = &CastVoteCommandRequest{}
+	case "reveal-cards":
+		cmd = game.RevealCardsCommand{}
+	case "finish-round":
+		cr = &FinishRoundCommandRequest{}
 	}
-	err = json.NewDecoder(request.Body).Decode(cr)
-	if err != nil {
-		response.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(response).Encode(map[string]string{"error": "invalid body request", "message": err.Error()})
-		return
+	if cr != nil {
+		err = json.NewDecoder(request.Body).Decode(cr)
+		if err != nil {
+			response.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(response).Encode(map[string]string{"error": "invalid body request", "message": err.Error()})
+			return
+		}
+		cmd = cr.toCommand(playerId)
 	}
-	cmd := cr.toCommand(playerId)
 	gameAggregate := a.gameRegistry.GetAggregateRoot(gameId)
 	gameAggregate.HandleCommand(cmd)
 	response.WriteHeader(http.StatusAccepted)

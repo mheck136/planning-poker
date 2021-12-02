@@ -10,7 +10,7 @@ type player struct {
 type boardState int
 
 const (
-	undefinedState = iota
+	_ boardState = iota
 	idle
 	openForVotes
 	deciding
@@ -82,15 +82,31 @@ func (b *board) startRound(roundName string) {
 func (b *board) castVote(playerId uuid.UUID, vote string) {
 	if b.state == openForVotes && b.knowsPlayer(playerId) {
 		b.votes[playerId] = vote
+	}
+}
 
-		allVoted := true
-		for _, p := range b.players {
-			_, ok := b.votes[p.id]
-			allVoted = allVoted && ok
+func (b *board) allVoted() (allVoted bool) {
+	allVoted = true
+	for _, p := range b.players {
+		_, ok := b.votes[p.id]
+		allVoted = allVoted && ok
+		if !allVoted {
+			return
 		}
-		if allVoted {
-			b.state = deciding
-		}
+	}
+	return
+}
 
+func (b *board) revealCards() {
+	if b.state == openForVotes {
+		b.state = deciding
+	}
+}
+
+func (b *board) finishRound() {
+	if b.state == deciding {
+		b.votes = nil
+		b.state = idle
+		b.activeRoundName = ""
 	}
 }

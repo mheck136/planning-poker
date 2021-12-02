@@ -38,3 +38,13 @@ func (r CastVoteCommandRequest) toCommand(playerId uuid.UUID) game.Command {
 		Vote:     r.Vote,
 	}
 }
+
+type FinishRoundCommandRequest struct {
+	Result string `json:"result"`
+}
+
+func (r FinishRoundCommandRequest) toCommand(uuid.UUID) game.Command {
+	return game.FinishRoundCommand{
+		Result: r.Result,
+	}
+}

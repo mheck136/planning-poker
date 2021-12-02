@@ -118,8 +118,8 @@ func (a *AggregateRoot) toState() State {
 	for _, p := range a.board.players {
 		state.Players[p.id] = p.name
 	}
+	votes := make(map[uuid.UUID]string, len(a.board.players))
 	if a.board.isOpenForVotes() || a.board.isDeciding() {
-		votes := make(map[uuid.UUID]string, len(a.board.votes))
 		for playerId, vote := range a.board.votes {
 			if a.board.isOpenForVotes() {
 				votes[playerId] = ""
@@ -127,7 +127,7 @@ func (a *AggregateRoot) toState() State {
 				votes[playerId] = vote
 			}
 		}
-		state.Votes = votes
 	}
+	state.Votes = votes
 	return state
 }
