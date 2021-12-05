@@ -2,9 +2,10 @@ package main
 
 import (
 	"github.com/google/uuid"
-	"github.com/mheck136/planning-poker/game"
-	"github.com/mheck136/planning-poker/gameapi"
+	"github.com/mheck136/planning-poker/aggregate"
+	"github.com/mheck136/planning-poker/api"
 	"github.com/mheck136/planning-poker/notifier"
+	"github.com/mheck136/planning-poker/registry"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -12,14 +13,14 @@ import (
 
 type mockEventStore int
 
-func (m mockEventStore) StoreEvents(events []game.PersistedEvent) error {
+func (m mockEventStore) StoreEvents(events []registry.PersistedEvent) error {
 	for _, event := range events {
 		log.Info().Interface("events", events).RawJSON("event", event.Data).Msg("storing event")
 	}
 	return nil
 }
 
-func (m mockEventStore) RetrieveAllEvents(uuid.UUID) ([]game.PersistedEvent, error) {
+func (m mockEventStore) RetrieveAllEvents(uuid.UUID) ([]registry.PersistedEvent, error) {
 	panic("implement me")
 }
 
@@ -28,9 +29,11 @@ func main() {
 
 	not := notifier.New()
 
-	reg := game.NewRegistry(mockEventStore(1), not)
+	reg := registry.New(mockEventStore(1), func(id uuid.UUID) *aggregate.Aggregate {
+		return aggregate.New(id, not)
+	})
 
-	a := gameapi.New(
+	a := api.New(
 		reg,
 		not,
 	)

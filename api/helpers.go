@@ -1,4 +1,4 @@
-package gameapi
+package api
 
 import (
 	"encoding/json"
@@ -53,4 +53,13 @@ func extractPlayerId(request *http.Request) (uuid.UUID, error) {
 		return uuid.UUID{}, fmt.Errorf("player id cookie not present")
 	}
 	return uuid.Parse(cookie.Value)
+}
+
+func mustDecodeBody(response http.ResponseWriter, request *http.Request, target interface{}) bool {
+	err := json.NewDecoder(request.Body).Decode(target)
+	if err != nil {
+		_ = json.NewEncoder(response).Encode(map[string]string{"error": "invalid body request", "message": err.Error()})
+		return false
+	}
+	return true
 }

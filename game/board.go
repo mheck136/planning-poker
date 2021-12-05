@@ -1,6 +1,8 @@
 package game
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 type player struct {
 	id   uuid.UUID
@@ -29,22 +31,35 @@ func (s boardState) String() string {
 	}
 }
 
-func newBoard() *board {
-	return &board{
+func NewBoard(id uuid.UUID) *Board {
+	return &Board{
+		id:              id,
 		players:         nil,
 		state:           idle,
 		activeRoundName: "",
 	}
 }
 
-type board struct {
+type Board struct {
+	id              uuid.UUID
+	title           string
+	initialized     bool
 	players         []player
 	state           boardState
 	activeRoundName string
 	votes           map[uuid.UUID]string
 }
 
-func (b *board) knowsPlayer(id uuid.UUID) bool {
+func (b *Board) IsInitialized() bool {
+	return b.initialized
+}
+
+func (b *Board) Initialize(title string) {
+	b.title = title
+	b.initialized = true
+}
+
+func (b *Board) KnowsPlayer(id uuid.UUID) bool {
 	for _, p := range b.players {
 		if p.id == id {
 			return true
@@ -53,25 +68,28 @@ func (b *board) knowsPlayer(id uuid.UUID) bool {
 	return false
 }
 
-func (b *board) addPlayer(p player) {
-	if !b.knowsPlayer(p.id) {
-		b.players = append(b.players, p)
+func (b *Board) AddPlayer(playerId uuid.UUID, name string) {
+	if !b.KnowsPlayer(playerId) {
+		b.players = append(b.players, player{
+			id:   playerId,
+			name: name,
+		})
 	}
 }
 
-func (b *board) isIdle() bool {
+func (b *Board) IsIdle() bool {
 	return b.state == idle
 }
 
-func (b *board) isOpenForVotes() bool {
+func (b *Board) IsOpenForVotes() bool {
 	return b.state == openForVotes
 }
 
-func (b *board) isDeciding() bool {
+func (b *Board) IsDeciding() bool {
 	return b.state == deciding
 }
 
-func (b *board) startRound(roundName string) {
+func (b *Board) StartRound(roundName string) {
 	if b.state == idle {
 		b.activeRoundName = roundName
 		b.state = openForVotes
@@ -79,13 +97,13 @@ func (b *board) startRound(roundName string) {
 	}
 }
 
-func (b *board) castVote(playerId uuid.UUID, vote string) {
-	if b.state == openForVotes && b.knowsPlayer(playerId) {
+func (b *Board) CastVote(playerId uuid.UUID, vote string) {
+	if b.state == openForVotes && b.KnowsPlayer(playerId) {
 		b.votes[playerId] = vote
 	}
 }
 
-func (b *board) allVoted() (allVoted bool) {
+func (b *Board) allVoted() (allVoted bool) {
 	allVoted = true
 	for _, p := range b.players {
 		_, ok := b.votes[p.id]
@@ -97,16 +115,40 @@ func (b *board) allVoted() (allVoted bool) {
 	return
 }
 
-func (b *board) revealCards() {
+func (b *Board) RevealCards() {
 	if b.state == openForVotes {
 		b.state = deciding
 	}
 }
 
-func (b *board) finishRound() {
+func (b *Board) FinishRound() {
 	if b.state == deciding {
 		b.votes = nil
 		b.state = idle
 		b.activeRoundName = ""
 	}
+}
+
+func (b *Board) ToSnapshot() Snapshot {
+	snapshot := Snapshot{
+		GameId:          b.id,
+		Players:         make(map[uuid.UUID]string),
+		GameState:       b.state.String(),
+		ActiveRoundName: b.activeRoundName,
+	}
+	for _, p := range b.players {
+		snapshot.Players[p.id] = p.name
+	}
+	votes := make(map[uuid.UUID]string, len(b.players))
+	if b.IsOpenForVotes() || b.IsDeciding() {
+		for playerId, vote := range b.votes {
+			if b.IsOpenForVotes() {
+				votes[playerId] = ""
+			} else {
+				votes[playerId] = vote
+			}
+		}
+	}
+	snapshot.Votes = votes
+	return snapshot
 }

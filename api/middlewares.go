@@ -1,4 +1,4 @@
-package gameapi
+package api
 
 import (
 	"github.com/google/uuid"
